@@ -1,0 +1,69 @@
+.header {
+  background-color: #4068B7;
+  color: #fff;
+  padding: 10px 20px;
+}
+
+
+.nav-list {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+}
+
+.nav-list li {
+  margin-right: 20px;
+}
+
+.nav-list li a {
+  color: #fff;
+  text-decoration: none;
+  padding: 10px; /* Добавим отступы для каждой ссылки */
+}
+
+.nav-list li a:hover {
+  background-color: #0099ff; /* Изменение цвета при наведении курсора */
+}
+
+.container {
+  display: flex;
+  justify-content: center; 
+  align-items: center; 
+  margin: auto;
+  padding: 20px;
+}
+
+.video-container {
+	background-color: black; 
+	width: 600px; 
+	height: 600px; 
+	margin-right: 20px; 
+	position: relative;
+}
+
+video {
+  width: 100%; 
+  height: 100%; 
+  object-fit: cover; 
+}
+
+button {
+  font-family: "Comfortaa", sans-serif;
+  padding: 10px;
+  border-radius: 10px;
+  border: none;
+  color: #fff;
+  background-color: #0099ff;
+  position: absolute; 
+  bottom: 10px;
+  left: 50%; 
+  transform: translateX(-50%); 
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #ff8800;
+}
