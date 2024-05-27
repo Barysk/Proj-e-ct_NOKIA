@@ -8,12 +8,11 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body class="dark-theme">
-    {% include 'header.html' %}
 
     <div class="container mt-5">
         <div class="row">
             <div class="col-12">
-                <a href="{{ url_for('index') }}" class="btn btn-danger">Opuść</a>
+                <a href="{{ url_for('redirect_and_leave') }}" class="btn btn-danger">Opuść</a>
                 <span class="float-right">Zalogowany jako: {{ current_user }}</span>
             </div>
         </div>

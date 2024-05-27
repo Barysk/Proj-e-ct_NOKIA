@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 from db import *
 import secrets
 import os
@@ -6,15 +6,9 @@ from flask_login import LoginManager, login_required
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
 import random
-from flask import Flask, render_template, request, redirect, url_for, session, flash
 from datetime import datetime, timedelta
 from threading import Thread
-from sqlalchemy.exc import IntegrityError
 import time
-
-
-
-
 
 # Inicjalizacja aplikacji Flask
 app = Flask(__name__)
@@ -26,7 +20,6 @@ app.secret_key = secrets.token_hex(16)
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'instance', 'database.db')
 db.init_app(app)
-
 
 # Utworzenie wszystkich tabel w bazie danych, jeśli nie istnieją
 with app.app_context():
@@ -84,22 +77,15 @@ def login():
             return render_template('login.html', error_message=error_message)
     return render_template('login.html')
 
-
-
-
-
 def get_chat_history(meeting_id):
     chat_history = ChatMessage.query.filter_by(MeetingID=meeting_id).order_by(ChatMessage.MessageID.asc()).all()
     return chat_history
-
-
 
 # Trasa odpowiedzialna za wylogowanie użytkownika
 @app.route('/logout', methods=['GET'])
 def logout():
     session.clear()  # Usunięcie wszystkich danych z sesji
     return redirect(url_for('login'))  # Przekierowanie do strony logowania
-
 
 @app.route('/join_room', methods=['GET', 'POST'])
 def join_room():
@@ -121,11 +107,12 @@ def join_room():
         if meeting is None:
             flash('Nie ma spotkania o podanym kodzie.', 'error')
             return redirect(url_for('join_room'))
+        
+        # Dodanie meeting_id do sesji
+        session['meeting_id'] = room_code
         join_meeting(room_code)
         # Przekierowanie do strony room.html
         return redirect(url_for('room', room_code=room_code))
-        
-        
     
     return render_template('join_room.html', current_user=current_user)
 
@@ -171,15 +158,12 @@ def join_meeting(meeting_id):
         raise ValueError("Meeting not found.")
     
 @app.route('/redirect_and_leave', methods=['GET', 'POST'])
-def redirect_and_leave():
-    
+def redirect_and_leave():    
+    meeting_id = session.get('meeting_id')
+    if meeting_id:
+        leave_meeting(meeting_id)
+    return redirect(url_for('index'))
 
-    room_code = session.pop('room_code', '')
-    leave_meeting(room_code)
-    return render_template('index.html', current_user=session.get('current_user'))
-    
-    
-@app.route('/leave_meeting', methods=['POST'])
 def leave_meeting(meeting_id):
     meeting = Meeting.query.get(meeting_id)
     if meeting and meeting.attendees_count > 0:
@@ -189,7 +173,7 @@ def leave_meeting(meeting_id):
         raise ValueError("No attendees to leave the meeting.")
     else:
         raise ValueError("Meeting not found.")
-    
+
 def remove_inactive_meetings():
     while True:
         current_time = datetime.now()
@@ -199,7 +183,6 @@ def remove_inactive_meetings():
                 db.session.delete(meeting)
             db.session.commit()
         time.sleep(60)  # Oczekuj 1 minutę przed kolejnym sprawdzeniem
-
 
 # Trasa do zarządzania ustawieniami użytkownika
 @app.route('/settings', methods=['GET', 'POST'])
@@ -238,8 +221,6 @@ def settings():
     current_email = User.query.filter_by(Name=current_user).first().Email  # Pobranie aktualnego emaila użytkownika
     return render_template('settings.html', current_user=current_user, current_email=current_email)
 
-
-
 def handle_message(msg, meeting_id):
     print(f"Message: {msg}")
     # Tworzenie nowego obiektu wiadomości czatu
@@ -248,7 +229,6 @@ def handle_message(msg, meeting_id):
     db.session.add(new_message)
     # Zatwierdzenie zmian w bazie danych
     db.session.commit()
-
 
 @app.route('/room/<int:room_code>', methods=['GET', 'POST'])
 def room(room_code):
@@ -271,14 +251,10 @@ def send_message(room_code):
     handle_message(message, room_code)
     return redirect(url_for('room', room_code=room_code))
 
-    
-
 # Trasa do strony FAQ
 @app.route('/faq')
 def faq():
     return render_template('faq.html')  # Wyświetlenie strony FAQ
-
-
 
 # Trasa do strony O nas
 @app.route('/about')
@@ -290,4 +266,4 @@ remove_inactive_meetings_thread.daemon = True
 remove_inactive_meetings_thread.start()
 
 if __name__ == '__main__':
-    app.run(debug=True) 
+    app.run(debug=True)
