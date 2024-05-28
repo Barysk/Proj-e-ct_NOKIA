@@ -174,15 +174,6 @@ def leave_meeting(meeting_id):
     else:
         raise ValueError("Meeting not found.")
 
-def remove_inactive_meetings():
-    while True:
-        current_time = datetime.now()
-        if current_time.minute % 10 == 0:  # Sprawdzaj co 10 minut
-            inactive_meetings = Meeting.query.filter_by(attendees_count=0).all()
-            for meeting in inactive_meetings:
-                db.session.delete(meeting)
-            db.session.commit()
-        time.sleep(60)  # Oczekuj 1 minutę przed kolejnym sprawdzeniem
 
 # Trasa do zarządzania ustawieniami użytkownika
 @app.route('/settings', methods=['GET', 'POST'])
@@ -251,9 +242,35 @@ def send_message(room_code):
     handle_message(message, room_code)
     return redirect(url_for('room', room_code=room_code))
 
+
+def remove_inactive_meetings():
+    while True:
+        with app.app_context():
+            # Wyszukiwanie wszystkich spotkań z liczbą uczestników równą 0
+            inactive_meetings = Meeting.query.filter_by(attendees_count=0).all()
+            if inactive_meetings:
+                for meeting in inactive_meetings:
+                    db.session.delete(meeting)
+                db.session.commit()
+                print("Removed inactive meetings.")
+        time.sleep(600)  # Pauza na 10 min przed kolejnym sprawdzeniem
+
+# Tworzenie i uruchamianie wątku w tle
+def start_background_task():
+    thread = Thread(target=remove_inactive_meetings)
+    thread.daemon = True 
+    thread.start()
+    
+
+with app.app_context():
+    start_background_task()    
+
+
+
 # Trasa do strony FAQ
 @app.route('/faq')
 def faq():
+    remove_inactive_meetings
     return render_template('faq.html')  # Wyświetlenie strony FAQ
 
 # Trasa do strony O nas
@@ -261,9 +278,6 @@ def faq():
 def about():
     return render_template('about.html')  # Wyświetlenie strony O nas
 
-remove_inactive_meetings_thread = Thread(target=remove_inactive_meetings)
-remove_inactive_meetings_thread.daemon = True  
-remove_inactive_meetings_thread.start()
-
 if __name__ == '__main__':
+    start_background_task()
     app.run(debug=True)
