@@ -1,4 +1,5 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, Response
+from flask_socketio import SocketIO, emit
 from db import *
 import secrets
 import os
@@ -7,11 +8,15 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
 import random
 from datetime import datetime, timedelta
-from threading import Thread
 import time
+import cv2
+import pygame
+import threading
 
 # Inicjalizacja aplikacji Flask
 app = Flask(__name__)
+
+socketio = SocketIO(app)
 
 # Ustawienie sekretnego klucza dla sesji, generowane losowo za każdym razem, gdy aplikacja się uruchamia
 app.secret_key = secrets.token_hex(16)
@@ -25,22 +30,61 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 
+# Konfiguracja kamery (zmiana na kamerę USB)
+camera = cv2.VideoCapture(0)  # Zakładając, że kamera USB jest dostępna pod indeksem 1
+
+def gen_frames():
+    while True:
+        success, frame = camera.read()
+        if not success:
+            break
+        else:
+            ret, buffer = cv2.imencode('.jpg', frame)
+            frame = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+def gamepad_listener():
+    pygame.init()
+    pygame.joystick.init()
+
+    joystick = pygame.joystick.Joystick(0)
+    joystick.init()
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.JOYBUTTONDOWN or event.type == pygame.JOYAXISMOTION:
+                axes = [joystick.get_axis(i) for i in range(joystick.get_numaxes())]
+                buttons = [joystick.get_button(i) for i in range(joystick.get_numbuttons())]
+                data = {'axes': axes, 'buttons': buttons}
+                print('Emitting data:', data)  # Debug line
+                socketio.emit('update_log', data, namespace='/')  # Remove broadcast=True
+        pygame.time.wait(10)
+
+
+gamepad_thread = threading.Thread(target=gamepad_listener)
+gamepad_thread.daemon = True
+gamepad_thread.start()
+
 # Główna strona aplikacji
 @app.route('/')
 def index():
-    # Wyświetlanie strony głównej z aktualnie zalogowanym użytkownikiem
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
     return render_template('index.html', current_user=session.get('current_user'))
 
 # Strona i logika rejestracji użytkownika
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        # Pobieranie danych z formularza
         username = request.form['username']
         password = request.form['password']
         email = request.form['email']
 
-        # Sprawdzenie, czy użytkownik już istnieje w bazie danych
         existing_user = User.query.filter_by(Name=username).first()
         if existing_user:
             error_message = "Użytkownik o tej nazwie już istnieje. Proszę wybrać inną nazwę."
@@ -50,7 +94,6 @@ def register():
             error_message = "Użytkownik o podanym adresie email już istnieje. Może chcesz się <a href='/login'>zalogować</a>?"
             return render_template('register.html', error_message=error_message)
 
-        # Rejestracja nowego użytkownika
         new_user = User(Name=username, Password=password, Email=email)
         db.session.add(new_user)
         db.session.commit()
@@ -61,14 +104,11 @@ def register():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        # Pobieranie danych z formularza
         username = request.form['username']
         password = request.form['password']
 
-        # Sprawdzenie, czy dane logowania są poprawne
         user = User.query.filter_by(Name=username, Password=password).first()
         if user and user.Password == password:
-            # Ustawienie sesji użytkownika
             session['user_id'] = user.UserID
             session['current_user'] = user.Name
             return redirect(url_for('index'))
@@ -81,39 +121,32 @@ def get_chat_history(meeting_id):
     chat_history = ChatMessage.query.filter_by(MeetingID=meeting_id).order_by(ChatMessage.MessageID.asc()).all()
     return chat_history
 
-# Trasa odpowiedzialna za wylogowanie użytkownika
 @app.route('/logout', methods=['GET'])
 def logout():
-    session.clear()  # Usunięcie wszystkich danych z sesji
-    return redirect(url_for('login'))  # Przekierowanie do strony logowania
+    session.clear()
+    return redirect(url_for('login'))
 
 @app.route('/join_room', methods=['GET', 'POST'])
 def join_room():
     current_user = session.get('current_user')
     if 'user_id' not in session:
         return redirect(url_for('login'))
-    
+
     if request.method == 'POST':
-        # Pobieranie kodu identyfikującego pokój z formularza
         room_code = request.form['room_code']
-    
-        # Sprawdzanie, czy kod składa się tylko z cyfr
         if not room_code.isdigit():
             flash('Kod pokoju musi składać się tylko z cyfr.', 'error')
             return redirect(url_for('join_room'))
 
-        # Sprawdzanie, czy istnieje spotkanie o podanym kodzie w bazie danych
         meeting = Meeting.query.filter_by(MeetingID=room_code).first()
         if meeting is None:
             flash('Nie ma spotkania o podanym kodzie.', 'error')
             return redirect(url_for('join_room'))
-        
-        # Dodanie meeting_id do sesji
+
         session['meeting_id'] = room_code
         join_meeting(room_code)
-        # Przekierowanie do strony room.html
         return redirect(url_for('room', room_code=room_code))
-    
+
     return render_template('join_room.html', current_user=current_user)
 
 @app.route('/create_room', methods=['GET', 'POST'])
@@ -122,29 +155,22 @@ def create_room():
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    room_code = session.pop('room_code', '')  # Pobranie wartości room_code z sesji
+    room_code = session.pop('room_code', '')
 
     if request.method == 'POST':
-        # Pobieranie kodu identyfikującego pokoju z formularza
         room_code = request.form['room_code']
-
-        # Sprawdzanie, czy kod składa się tylko z cyfr
         if not room_code.isdigit():
             flash('Kod pokoju musi składać się tylko z cyfr.', 'error')
             return redirect(url_for('create_room'))
 
-        # Sprawdzanie, czy istnieje już spotkanie o podanym kodzie w bazie danych
         existing_meeting = Meeting.query.filter_by(MeetingID=room_code).first()
         if existing_meeting:
             flash('Spotkanie o podanym kodzie już istnieje.', 'error')
             return redirect(url_for('create_room'))
 
-        # Dodanie spotkania do bazy danych
         meeting = Meeting(MeetingID=room_code)
         db.session.add(meeting)
         db.session.commit()
-
-        # Przekierowanie do strony join_room.html z już wpisanym kodem spotkania
         return redirect(url_for('join_room', room_code=room_code))
 
     return render_template('create_room.html', current_user=current_user, room_code=room_code)
@@ -156,9 +182,9 @@ def join_meeting(meeting_id):
         db.session.commit()
     else:
         raise ValueError("Meeting not found.")
-    
+
 @app.route('/redirect_and_leave', methods=['GET', 'POST'])
-def redirect_and_leave():    
+def redirect_and_leave():
     meeting_id = session.get('meeting_id')
     if meeting_id:
         leave_meeting(meeting_id)
@@ -174,8 +200,16 @@ def leave_meeting(meeting_id):
     else:
         raise ValueError("Meeting not found.")
 
+def remove_inactive_meetings():
+    while True:
+        current_time = datetime.now()
+        if current_time.minute % 10 == 0:
+            inactive_meetings = Meeting.query.filter_by(attendees_count=0).all()
+            for meeting in inactive_meetings:
+                db.session.delete(meeting)
+            db.session.commit()
+        time.sleep(60)
 
-# Trasa do zarządzania ustawieniami użytkownika
 @app.route('/settings', methods=['GET', 'POST'])
 def settings():
     current_user = session.get('current_user')
@@ -183,20 +217,19 @@ def settings():
         return redirect(url_for('login'))
 
     user_id = session['user_id']
-    
+
     if request.method == 'POST':
         username = request.form['username']
         email = request.form['email']
         password = request.form['password']
         confirm_password = request.form['confirm_password']
-        
-        user = User.query.filter_by(UserID=user_id).first()  # Pobranie danych użytkownika
+
+        user = User.query.filter_by(UserID=user_id).first()
 
         if password != confirm_password:
-            flash('Hasła nie są identyczne.', 'error')  # Komunikat o błędzie
+            flash('Hasła nie są identyczne.', 'error')
             return redirect(url_for('settings'))
 
-        # Aktualizacja danych użytkownika
         if username:
             user.Name = username
         if email:
@@ -204,21 +237,17 @@ def settings():
         if password:
             user.Password = password
 
-        db.session.commit()  # Zapisanie zmian w bazie danych
+        db.session.commit()
 
-        flash('Zmiany zostały zapisane.', 'success')  # Komunikat o sukcesie
+        flash('Zmiany zostały zapisane.', 'success')
         return redirect(url_for('settings'))
 
-    current_email = User.query.filter_by(Name=current_user).first().Email  # Pobranie aktualnego emaila użytkownika
+    current_email = User.query.filter_by(Name=current_user).first().Email
     return render_template('settings.html', current_user=current_user, current_email=current_email)
 
 def handle_message(msg, meeting_id):
-    print(f"Message: {msg}")
-    # Tworzenie nowego obiektu wiadomości czatu
     new_message = ChatMessage(UserID=session['user_id'], MeetingID=meeting_id, MessageContent=msg)
-    # Dodanie nowej wiadomości do sesji SQLAlchemy
     db.session.add(new_message)
-    # Zatwierdzenie zmian w bazie danych
     db.session.commit()
 
 @app.route('/room/<int:room_code>', methods=['GET', 'POST'])
@@ -227,7 +256,6 @@ def room(room_code):
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    # Sprawdzenie, czy spotkanie o danym kodzie istnieje w bazie danych
     meeting = Meeting.query.filter_by(MeetingID=room_code).first()
     if not meeting:
         flash('Spotkanie o podanym kodzie nie istnieje.', 'error')
@@ -242,42 +270,13 @@ def send_message(room_code):
     handle_message(message, room_code)
     return redirect(url_for('room', room_code=room_code))
 
-
-def remove_inactive_meetings():
-    while True:
-        with app.app_context():
-            # Wyszukiwanie wszystkich spotkań z liczbą uczestników równą 0
-            inactive_meetings = Meeting.query.filter_by(attendees_count=0).all()
-            if inactive_meetings:
-                for meeting in inactive_meetings:
-                    db.session.delete(meeting)
-                db.session.commit()
-                print("Removed inactive meetings.")
-        time.sleep(600)  # Pauza na 10 min przed kolejnym sprawdzeniem
-
-# Tworzenie i uruchamianie wątku w tle
-def start_background_task():
-    thread = Thread(target=remove_inactive_meetings)
-    thread.daemon = True 
-    thread.start()
-    
-
-with app.app_context():
-    start_background_task()    
-
-
-
-# Trasa do strony FAQ
 @app.route('/faq')
 def faq():
-    remove_inactive_meetings
-    return render_template('faq.html')  # Wyświetlenie strony FAQ
+    return render_template('faq.html')
 
-# Trasa do strony O nas
 @app.route('/about')
 def about():
-    return render_template('about.html')  # Wyświetlenie strony O nas
+    return render_template('about.html')
 
 if __name__ == '__main__':
-    start_background_task()
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)

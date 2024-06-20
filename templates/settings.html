@@ -4,23 +4,23 @@
 
 {% block content %}
 <div class="container mt-5">
-    <h2>Ustawienia</h2>
+    <h2 style="color: white;">Ustawienia</h2>
     <form action="{{ url_for('settings') }}" method="post">
         <div class="form-group">
-            <label for="username">Nazwa użytkownika:</label>
-            <input type="text" class="form-control" id="username" name="username" value="{{ current_user }}">
+            <label for="username" style="color: white;">Nazwa użytkownika:</label>
+            <input type="text" style ="width:200px; margin: auto;" class="form-control" id="username" name="username" value="{{ current_user }}">
         </div>
         <div class="form-group">
-            <label for="email">Adres e-mail:</label>
-            <input type="email" class="form-control" id="email" name="email" value="{{ current_email }}">
+            <label for="email" style="color: white;">Adres e-mail:</label>
+            <input type="email" style ="width:200px; margin: auto;" class="form-control" id="email" name="email" value="{{ current_email }}">
         </div>
         <div class="form-group">
-            <label for="password">Nowe hasło:</label>
-            <input type="password" class="form-control" id="password" name="password">
+            <label for="password" style="color: white;">Nowe hasło:</label>
+            <input type="password" style ="width:200px; margin: auto;" class="form-control" id="password" name="password">
         </div>
         <div class="form-group">
-            <label for="confirm_password">Potwierdź nowe hasło:</label>
-            <input type="password" class="form-control" id="confirm_password" name="confirm_password">
+            <label for="confirm_password" style="color: white;">Potwierdź nowe hasło:</label>
+            <input type="password" style ="width:200px; margin: auto;" class="form-control" id="confirm_password" name="confirm_password">
 	<div class="mt-4"></div> 
         </div>
         <button type="submit" class="btn btn-primary">Zapisz zmiany</button>

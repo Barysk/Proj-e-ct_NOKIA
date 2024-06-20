@@ -7,20 +7,31 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap.min.css') }}">
     <!-- Importowanie stylów z pliku style.css -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@300..700&family=Reddit+Mono:wght@200..900&display=swap"
+          rel="stylesheet">
+    <style>
+        body {
+            font-family: "Reddit Mono", monospace;
+            font-optical-sizing: auto;
+            font-style: normal;
+        }
+    </style>
 </head>
 <body class="dark-theme">
     {% include 'header.html' %}
 
     <div class="container mt-5">
-        <div class="card text-center">
+        <div class="card text-center" style ="width:500px; margin: auto;">
             <div class="card-body">
                 <h5 class="card-title">Stwórz nowy pokój</h5>
                 <!-- Formularz do wprowadzenia kodu pokoju -->
                 <form method="post">
                     <div class="form-group">
-                        <label for="room_code">Kod pokoju:</label>
                         <!-- Ustawienie wartości początkowej pola kodu pokoju z wykorzystaniem zmiennej room_code -->
-                        <input type="text" class="form-control" id="room_code" name="room_code" placeholder="Wpisz kod pokoju" value="{{ room_code }}">
+                        <input type="text" style ="width:200px; margin: auto;" class="form-control" id="room_code" name="room_code" placeholder="Wpisz kod pokoju" value="{{ room_code }}">
                         <div class="mt-4"></div>
                     </div>
                     <button type="submit" class="btn btn-primary">Utwórz</button>
@@ -36,7 +47,7 @@
                     {% endif %}
                 {% endwith %}
                 <!-- Opcja przejścia do podstrony "Dołącz do pokoju" -->
-                <p class="mt-3">Już masz kod pokoju? <a href="/join_room">Dołącz do pokoju</a></p>
+                <p class="mt-3">Już masz kod pokoju? <a href="/join_room" style="color: #7992b0;">Dołącz do pokoju</a></p>
             </div>
         </div>
     </div>
