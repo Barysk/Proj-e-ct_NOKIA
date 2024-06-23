@@ -1,3 +1,5 @@
+import socket
+
 from flask import Flask, render_template, request, redirect, url_for, session, flash, Response
 from flask_socketio import SocketIO, emit
 from db import *
@@ -15,7 +17,6 @@ import threading
 
 # Inicjalizacja aplikacji Flask
 app = Flask(__name__)
-
 socketio = SocketIO(app)
 
 # Ustawienie sekretnego klucza dla sesji, generowane losowo za każdym razem, gdy aplikacja się uruchamia
@@ -49,22 +50,54 @@ def video_feed():
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 def gamepad_listener():
-    pygame.init()
-    pygame.joystick.init()
+    HOST = "10.42.0.77"
+    PORT = 9090
+    name = "flask_server"
 
-    joystick = pygame.joystick.Joystick(0)
-    joystick.init()
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.connect((HOST, PORT))
+
+    server.sendall(name.encode("ascii"))
+
+    axis_positions = ["L3_X", "L3_Y", "L3_Z", "R3_X", "R3_Y", "R3_Z"]
+    button_states = ["Button L1", "Button R1", "Triangle", "Square", "Circle", "Cross", "Start", "Select", "UP/DOWN", "LEFT/RIGHT"]
+
+    def convert_mes_to_table(data):
+        data = data.replace("data|", "").replace("|!", "")
+        rows = data.split(';')
+        table = []
+        for row in rows:
+            if row:
+                columns = row.split('|')
+                table.append(columns)
+        return table
+
+    def translate_input(data):
+        translated = []
+        axis_data = data[0].split(',')
+        button_data = data[1].split(',')
+        for i in range(6):
+            translated.append(f"{axis_positions[i]}: {axis_data[i]}")
+        for i in range(10):
+            translated.append(f"{button_states[i]}: {'Pressed' if button_data[i] != '0' else 'Released'}")
+        return translated
 
     while True:
-        for event in pygame.event.get():
-            if event.type == pygame.JOYBUTTONDOWN or event.type == pygame.JOYAXISMOTION:
-                axes = [joystick.get_axis(i) for i in range(joystick.get_numaxes())]
-                buttons = [joystick.get_button(i) for i in range(joystick.get_numbuttons())]
-                data = {'axes': axes, 'buttons': buttons}
-                print('Emitting data:', data)  # Debug line
-                socketio.emit('update_log', data, namespace='/')  # Remove broadcast=True
-        pygame.time.wait(10)
-
+        try:
+            reply = server.recv(4096).decode("ascii")
+            if reply == "NAME":
+                server.sendall(name.encode("ascii"))
+            else:
+                table = convert_mes_to_table(reply)
+                for row in table:
+                    translated_row = translate_input(row)
+                    for item in translated_row:
+                        print(item)
+                        socketio.emit('update_log', item, namespace='/')
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            server.close()
+            break
 
 gamepad_thread = threading.Thread(target=gamepad_listener)
 gamepad_thread.daemon = True

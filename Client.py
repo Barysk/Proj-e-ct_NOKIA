@@ -1,22 +1,29 @@
-import pygame
-import time
+import socket
+import threading
 
+HOST = "10.42.0.77"
+PORT = 9090
 
-pygame.init()
-pygame.joystick.init()
+name = input("Choose a name:")
 
-
-if pygame.joystick.get_count() < 1:
-    print("No controller connected")
-    exit()
-
-
-controller = pygame.joystick.Joystick(0)
-controller.init()
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.connect((HOST, PORT))
 
 axis_positions = ["L3_X", "L3_Y", "L3_Z", "R3_X", "R3_Y", "R3_Z"]
-button_states = ["Button L1", "Button R1", "Triangle", "Square", "Circle", "Cross", "Start", "Select", "UP/DOWN",
-                 "LEFT/RIGHT"]
+button_states = ["Button L1", "Button R1", "Triangle", "Square", "Circle", "Cross", "Start", "Select", "UP/DOWN", "LEFT/RIGHT"]
+
+
+def convert_mes_to_table(data):
+    data = data.replace("data|", "").replace("|!", "")
+    rows = data.split(';')
+
+    table = []
+    for row in rows:
+        if row:
+            columns = row.split('|')
+            table.append(columns)
+
+    return table
 
 
 def translate_input(data):
@@ -33,32 +40,32 @@ def translate_input(data):
     return translated
 
 
-def read_controller_input():
+def receive_messages():
     while True:
-        pygame.event.pump()
+        try:
+            reply = server.recv(4096).decode("ascii")
+            if reply == "NAME":
+                server.sendall(name.encode("ascii"))
+            else:
+                table = convert_mes_to_table(reply)
+                for row in table:
+                    translated_row = translate_input(row)
+                    for item in translated_row:
+                        print(item)
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            server.close()
+            break
 
 
-        axis_values = []
-        for i in range(controller.get_numaxes()):
-            axis_values.append(controller.get_axis(i))
+def send_message():
+    while True:
+        message = f"{input('napisz wiadomosc')}"
+        server.send(message.encode("ascii"))
 
 
-        button_values = []
-        for i in range(controller.get_numbuttons()):
-            button_values.append(controller.get_button(i))
+receive_thread = threading.Thread(target=receive_messages)
+receive_thread.start()
 
-        axis_str = ','.join(map(str, axis_values))
-        button_str = ','.join(map(str, button_values))
-
-        controller_data = [axis_str, button_str]
-
-
-        translated_data = translate_input(controller_data)
-        for item in translated_data:
-            print(item)
-
-        time.sleep(0.5)
-
-
-
-read_controller_input()
+send_thread = threading.Thread(target=send_message)
+send_thread.start()

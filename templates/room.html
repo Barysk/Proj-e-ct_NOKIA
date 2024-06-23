@@ -1,4 +1,3 @@
-<!-- room.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -121,61 +120,8 @@
                 return Math.round(num * 1000) / 1000;
             }
 
-            // Round L3 and R3 values
-            var l3 = data.axes.slice(0, 3).map(roundToThreeDecimals);
-            var r3 = data.axes.slice(3, 6).map(roundToThreeDecimals);
-
-            // Format the data as desired
-            var formattedData = "====\n" +
-                                "Axes:\n" +
-                                "L3 [" + l3.join(", ") + "]\n" +
-                                "R3 [" + r3.join(", ") + "]\n" +
-                                "Buttons:\n" +
-                                "L1 [" + data.buttons[0] + "]\n" +
-                                "R1 [" + data.buttons[1] + "]\n" +
-                                "Tri, Squ, Cir, Cro [" + data.buttons.slice(2, 6).join(", ") + "]\n" +
-                                "Start, Select [" + data.buttons.slice(6, 8).join(", ") + "]\n" +
-                                "UP/DOWN [" + data.buttons[8] + "]\n" +
-                                "LEFT/RIGHT [" + data.buttons[9] + "]\n" +
-                                "Other [" + data.buttons.slice(10, 16).join(", ") + "]";
-
-            logContainer.append('<p>' + formattedData.replace(/\n/g, '<br>') + '</p>');
+            logContainer.append('<p>' + data.replace(/\n/g, '<br>') + '</p>');
             logContainer.scrollTop(logContainer.prop("scrollHeight"));  // Scroll to bottom
-
-            // Apply special style based on conditions
-            if (l3.some(value => value !== 0)) {
-                $('button:contains("L3")').addClass('special-style');
-            } else {
-                $('button:contains("L3")').removeClass('special-style');
-            }
-
-            if (r3.some(value => value !== 0)) {
-                $('button:contains("R3")').addClass('special-style');
-            } else {
-                $('button:contains("R3")').removeClass('special-style');
-            }
-
-            // Checking each button conditionally
-            var buttons = [
-                { selector: 'button:contains("L1")', value: data.buttons[0] },
-                { selector: 'button:contains("R1")', value: data.buttons[1] },
-                { selector: 'button:contains("TRIANGLE")', value: data.buttons[2] },
-                { selector: 'button:contains("SQUARE")', value: data.buttons[3] },
-                { selector: 'button:contains("CIRCLE")', value: data.buttons[4] },
-                { selector: 'button:contains("CROSS")', value: data.buttons[5] },
-                { selector: 'button:contains("START")', value: data.buttons[6] },
-                { selector: 'button:contains("SELECT")', value: data.buttons[7] },
-                { selector: 'button:contains("UP/DOWN")', value: data.buttons[8] },
-                { selector: 'button:contains("LEFT/RIGHT")', value: data.buttons[9] }
-            ];
-
-            buttons.forEach(button => {
-                if (button.value !== 0) {
-                    $(button.selector).addClass('special-style');
-                } else {
-                    $(button.selector).removeClass('special-style');
-                }
-            });
         });
 
         socket.on('disconnect', function() {
